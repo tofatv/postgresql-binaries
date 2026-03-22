@@ -6,35 +6,18 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         bison \
         build-essential \
-        clang-16 \
         flex \
-        fop \
-        gettext \
         git \
-        libicu-dev \
-        libkrb5-dev \
-        liblz4-dev \
         libossp-uuid-dev \
-        libperl-dev \
         libreadline-dev \
-        libssl-dev \
-        libxml2-dev \
-    	libxml2-utils \
-        libxslt-dev \
         libz-dev \
-        libzstd-dev \
-        llvm-16 \
-        lz4 \
         make \
         openssl \
+        libssl-dev \
         patchelf \
-        perl \
         pkg-config \
-        python3 \
-        python3-dev \
         wget \
-        xsltproc \
-        zstd
+    && rm -rf /var/lib/apt/lists/*
 
 RUN branch=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print "REL_"$1"_"$2}') && \
     echo "branch=$branch" && \
@@ -47,39 +30,54 @@ RUN branch=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print "REL_"$1"_"$2}') && \
 
 WORKDIR /usr/src/postgresql
 
-ENV CLANG=clang-16
-ENV LLVM_CONFIG="/usr/lib/llvm-16/bin/llvm-config"
-
+# Build PostgreSQL with minimal dynamic dependencies for maximum portability.
+# Removed: --with-libxml, --with-libxslt, --with-gssapi, --with-lz4, --with-zstd
+# These caused libxml2.so.2 (and others) to be required at runtime, breaking
+# on distributions where the soname differs (e.g. Arch has libxml2.so.16).
+#
+# Kept: --with-openssl (needed for TLS connections), --with-uuid=ossp (needed
+# for uuid-ossp extension), --with-readline (for psql).
+# OpenSSL is universally available as libssl.so.3 on modern distros.
 RUN major_version=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print $1}') && \
     ./configure \
       --prefix /opt/postgresql \
       --enable-integer-datetimes \
       --enable-option-checking=fatal \
       $([ $major_version -le 16 ] && echo "--enable-thread-safety") \
-      --with-gssapi \
+      --without-gssapi \
       --without-icu \
       --without-ldap \
-      --with-libxml \
-      --with-libxslt \
-      $([ $major_version -ge 14 ] && echo "--with-lz4") \
+      --without-libxml \
+      --without-libxslt \
+      --without-lz4 \
       --with-openssl \
       --with-pgport=5432 \
-      $([ $major_version -ge 15 ] && echo "--with-python") \
+      --without-python \
       --with-readline \
       --with-system-tzdata=/usr/share/zoneinfo \
       --with-uuid=ossp \
-      $([ $major_version -ge 16 ] && echo "--with-zstd") && \
-    make $([ $major_version -ge 15 ] && echo "world-bin") && \
-    make $([ $major_version -ge 15 ] && echo "install-world-bin" || echo "install") && \
+      --without-zstd && \
+    make -j$(nproc) && \
+    make install && \
     make -C contrib install
 
-# Update binary rpath to use a relative path.
-# LD_FLAGS=-Wl,-rpath,'$ORIGIN/../lib' should be used instead, but does not appear to work.
+# Update binary rpath to use a relative path so Postgres finds its own libs.
 RUN cd /opt/postgresql/bin && \
     rpath=$(patchelf --print-rpath postgres | sed 's|/opt/postgresql/lib|$ORIGIN/../lib|g') && \
-    find ./ -type f | xargs -L 1 patchelf --set-rpath $rpath
+    find ./ -type f | xargs -L 1 patchelf --set-rpath $rpath 2>/dev/null || true
 
 RUN cp /usr/src/postgresql/COPYRIGHT /opt/postgresql
+
+# Verify minimal dynamic dependencies
+RUN echo "=== Dynamic dependencies of postgres ===" && \
+    ldd /opt/postgresql/bin/postgres && \
+    echo "=== Checking for problematic libs ===" && \
+    ! ldd /opt/postgresql/bin/postgres | grep -q "libxml2" && echo "OK: no libxml2 dependency" && \
+    ! ldd /opt/postgresql/bin/postgres | grep -q "libxslt" && echo "OK: no libxslt dependency" && \
+    ! ldd /opt/postgresql/bin/postgres | grep -q "libkrb5" && echo "OK: no kerberos dependency" && \
+    ! ldd /opt/postgresql/bin/postgres | grep -q "liblz4" && echo "OK: no lz4 dependency" && \
+    ! ldd /opt/postgresql/bin/postgres | grep -q "libzstd" && echo "OK: no zstd dependency" && \
+    echo "=== All checks passed ==="
 
 # Create user and group for running tests
 RUN groupadd --system --gid 1000 postgresql && \
