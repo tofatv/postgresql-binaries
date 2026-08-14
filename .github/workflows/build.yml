@@ -27,9 +27,7 @@ jobs:
       matrix:
         id:
           - linux-arm64
-          - linux-arm64-musl
           - linux-x64
-          - linux-x64-musl
           - macos-arm64
           - windows-x64
 
@@ -40,26 +38,20 @@ jobs:
           # Linux
           #
 
+          # arm64 runs on the Mac runner: its Docker (colima) executes
+          # linux/arm64 NATIVELY on Apple silicon. On the x64 Linux runner the
+          # same leg runs under qemu user emulation, which took hours for a
+          # PostgreSQL compile even before the runner's playback-protecting
+          # CPU caps. musl legs were dropped outright: tofa ships only gnu
+          # x64/arm64 and nothing downloads the musl assets.
           - id: linux-arm64
             target: aarch64-unknown-linux-gnu
-            runner: [self-hosted, Linux, X64]
-            platform: linux/arm64/v8
-            architecture: "AArch64"
-
-          - id: linux-arm64-musl
-            target: aarch64-unknown-linux-musl
-            runner: [self-hosted, Linux, X64]
+            runner: [self-hosted, macOS, ARM64]
             platform: linux/arm64/v8
             architecture: "AArch64"
 
           - id: linux-x64
             target: x86_64-unknown-linux-gnu
-            runner: [self-hosted, Linux, X64]
-            platform: linux/amd64
-            architecture: "Advanced Micro Devices X86-64"
-
-          - id: linux-x64-musl
-            target: x86_64-unknown-linux-musl
             runner: [self-hosted, Linux, X64]
             platform: linux/amd64
             architecture: "Advanced Micro Devices X86-64"
@@ -295,7 +287,11 @@ jobs:
           postgres_file="$INSTALL_DIRECTORY/bin/postgres"
           
           if [[ "${{ matrix.id }}" = linux-* ]]; then
-            cpu_architecture=$(readelf --file-header "$postgres_file" | grep 'Machine:')
+            # readelf runs in the build image: the mac runner hosts the arm64
+            # linux leg and has no readelf of its own
+            cpu_architecture=$(docker run --rm --platform "$PLATFORM" \
+              --volume "$INSTALL_DIRECTORY":/opt/archtest postgresql-build:latest \
+              readelf --file-header /opt/archtest/bin/postgres | grep 'Machine:')
           else
             cpu_architecture=$(file "$postgres_file")
           fi
