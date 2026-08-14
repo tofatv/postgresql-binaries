@@ -237,8 +237,9 @@ jobs:
       - name: Extract binaries (Windows)
         if: ${{ startsWith(matrix.id, 'windows-') }}
         run: |
-          # bsdtar (Windows ships it as tar) extracts zip archives; unzip is not installed
-          tar -xf postgresql.zip
+          # Windows ships bsdtar (which reads zip) at System32; plain `tar` under
+          # Git bash resolves to GNU tar, which does not
+          /c/Windows/System32/tar.exe -xf postgresql.zip
           rm -rf pgsql/doc pgsql/pgAdmin*
           mv pgsql "$INSTALL_DIRECTORY"
 
@@ -273,8 +274,9 @@ jobs:
       - name: Build .zip archive (Windows)
         if: ${{ startsWith(matrix.id, 'windows-') }}
         run: |
-          # bsdtar -a picks the zip format from the extension; 7z is not installed
-          tar -a -cf "$ARCHIVE.zip" "$ARCHIVE"
+          # System32 bsdtar -a picks the zip format from the extension; Git bash`s
+          # GNU tar cannot write zip and 7z is not installed
+          /c/Windows/System32/tar.exe -a -cf "$ARCHIVE.zip" "$ARCHIVE"
           certutil -hashfile "$ARCHIVE.zip" SHA256 > "$ARCHIVE.zip.sha256"
           echo "WINDOWS_ASSET=$ARCHIVE.zip" >> $GITHUB_ENV
           echo "WINDOWS_ASSET_SUM=$ARCHIVE.zip.sha256" >> $GITHUB_ENV
