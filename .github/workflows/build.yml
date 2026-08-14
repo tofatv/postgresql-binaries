@@ -319,11 +319,21 @@ jobs:
           cp "$SOURCE_DIRECTORY/COPYRIGHT" "$INSTALL_DIRECTORY"
           cd "$ROOT_DIRECTORY"
 
-      # This allows the MacOS build to be relocated to a different directory
-      - name: Update library paths (MacOS)
+      # Make the MacOS build relocatable AND self-contained. The old fix-up
+      # only rewrote bin/* references to libpq: the built dylibs kept the
+      # runner's absolute path in their install names and cross-references,
+      # and everything kept linking Homebrew's openssl@3 by absolute path —
+      # so a machine without Homebrew's openssl could not start the server at
+      # all, and hardened-runtime consumers rejected the Homebrew dylibs
+      # (different Team IDs). The script copies every non-system dependency
+      # into lib/, rewrites all references (@executable_path/../lib from
+      # bin/, @loader_path from lib/) to a fixpoint, re-signs ad hoc
+      # (mandatory on arm64 after install_name_tool), and FAILS the build if
+      # any absolute non-system reference remains.
+      - name: Make install relocatable and self-contained (MacOS)
         if: ${{ startsWith(matrix.id, 'macos-') }}
         run: |
-          find $INSTALL_DIRECTORY/bin -type f | xargs -L 1 install_name_tool -change $INSTALL_DIRECTORY/lib/libpq.5.dylib '@executable_path/../lib/libpq.5.dylib'
+          python3 scripts/relocate_macos.py "$INSTALL_DIRECTORY"
 
       #
       # Windows
