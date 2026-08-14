@@ -5,6 +5,7 @@ ARG POSTGRESQL_VERSION
 RUN echo "POSTGRESQL_VERSION=$POSTGRESQL_VERSION"
 RUN apk update
 RUN apk add --no-cache \
+      ca-certificates \
       bash \
       bison \
       clang16 \
@@ -27,7 +28,6 @@ RUN apk add --no-cache \
       lz4-dev \
       make \
       musl-dev \
-      openssl-dev \
       ossp-uuid-dev \
       patchelf \
       perl \
@@ -44,7 +44,6 @@ RUN apk add --no-cache \
 RUN branch=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print "REL_"$1"_"$2}') && \
     echo "branch=$branch" && \
     git config --global http.version HTTP/1.1 && \
-    git config --global http.sslVerify false && \
     for i in $(seq 1 5); do \
         git clone --depth 1 --branch $branch -c advice.detachedHead=false https://git.postgresql.org/git/postgresql.git /usr/src/postgresql \
             && break || sleep 3; \
@@ -69,7 +68,7 @@ RUN major_version=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print $1}') && \
       --with-libxslt \
       $([ $major_version -ge 16 ] && echo "--with-llvm") \
       $([ $major_version -ge 14 ] && echo "--with-lz4") \
-      --with-openssl \
+      --without-openssl \
       --with-pgport=5432 \
       $([ $major_version -ge 15 ] && echo "--with-python") \
       --with-readline \

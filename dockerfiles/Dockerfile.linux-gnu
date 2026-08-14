@@ -4,6 +4,7 @@ ARG POSTGRESQL_VERSION
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        ca-certificates \
         bison \
         build-essential \
         flex \
@@ -12,8 +13,6 @@ RUN apt-get update && \
         libreadline-dev \
         libz-dev \
         make \
-        openssl \
-        libssl-dev \
         patchelf \
         pkg-config \
         wget \
@@ -22,7 +21,6 @@ RUN apt-get update && \
 RUN branch=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print "REL_"$1"_"$2}') && \
     echo "branch=$branch" && \
     git config --global http.version HTTP/1.1 && \
-    git config --global http.sslVerify false && \
     for i in $(seq 1 5); do \
         git clone --depth 1 --branch $branch -c advice.detachedHead=false https://git.postgresql.org/git/postgresql.git /usr/src/postgresql \
             && break || sleep 3; \
@@ -35,9 +33,11 @@ WORKDIR /usr/src/postgresql
 # These caused libxml2.so.2 (and others) to be required at runtime, breaking
 # on distributions where the soname differs (e.g. Arch has libxml2.so.16).
 #
-# Kept: --with-openssl (needed for TLS connections), --with-uuid=ossp (needed
-# for uuid-ossp extension), --with-readline (for psql).
-# OpenSSL is universally available as libssl.so.3 on modern distros.
+# Removed 2026-08-14: --with-openssl too. Nothing tofa runs needs OpenSSL
+# inside PostgreSQL (pg_trgm only, built-in SCRAM SHA-256, plain pg_dump,
+# sqlx clients over loopback), and dropping it removes the last non-libc
+# runtime library dependency a user's distro must provide.
+# Kept: --with-uuid=ossp (uuid-ossp extension), --with-readline (for psql).
 RUN major_version=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print $1}') && \
     ./configure \
       --prefix /opt/postgresql \
@@ -50,7 +50,7 @@ RUN major_version=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print $1}') && \
       --without-libxml \
       --without-libxslt \
       --without-lz4 \
-      --with-openssl \
+      --without-openssl \
       --with-pgport=5432 \
       --without-python \
       --with-readline \
@@ -77,6 +77,8 @@ RUN echo "=== Dynamic dependencies of postgres ===" && \
     ! ldd /opt/postgresql/bin/postgres | grep -q "libkrb5" && echo "OK: no kerberos dependency" && \
     ! ldd /opt/postgresql/bin/postgres | grep -q "liblz4" && echo "OK: no lz4 dependency" && \
     ! ldd /opt/postgresql/bin/postgres | grep -q "libzstd" && echo "OK: no zstd dependency" && \
+    ! ldd /opt/postgresql/bin/postgres | grep -q "libssl" && echo "OK: no openssl dependency" && \
+    ! ldd /opt/postgresql/bin/postgres | grep -q "libcrypto" && echo "OK: no libcrypto dependency" && \
     echo "=== All checks passed ==="
 
 # Create user and group for running tests
