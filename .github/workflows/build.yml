@@ -347,11 +347,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "$VERSION" ${{ env.ASSET }} ${{ env.ASSET_SUM }}
+          # --clobber: a retried leg must overwrite its own earlier upload
+          gh release upload "$VERSION" --clobber ${{ env.ASSET }} ${{ env.ASSET_SUM }}
 
       - name: Upload release archive (Windows)
         if: ${{ inputs.release == true && startsWith(matrix.id, 'windows-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "$VERSION" ${{ env.WINDOWS_ASSET }} ${{ env.WINDOWS_ASSET_SUM }}
+          gh release upload "$VERSION" --clobber ${{ env.WINDOWS_ASSET }} ${{ env.WINDOWS_ASSET_SUM }}
