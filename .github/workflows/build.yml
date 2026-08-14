@@ -219,7 +219,10 @@ jobs:
           $vsroot = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           $vcvars = "$vsroot\VC\Auxiliary\Build\vcvars64.bat"
           if (-not (Test-Path $vcvars)) { throw "vcvars64.bat not found under $vsroot" }
-          $env:Path = "C:\tools\winflexbison;" + $env:Path
+          # Explicit PATH: the runner service captures its environment at
+          # service start, so machine-PATH additions (Strawberry Perl) are
+          # invisible until a restart — name what the build needs directly.
+          $env:Path = "C:\tools\winflexbison;C:\Strawberry\perl\bin;" + $env:Path
           # INSTALL_DIRECTORY from the bash setup step is a /c/... path; use
           # the native form for meson.
           $prefix = Join-Path $env:GITHUB_WORKSPACE $env:ARCHIVE
