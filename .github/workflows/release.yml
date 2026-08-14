@@ -11,7 +11,7 @@ permissions:
 jobs:
   create_release:
     name: Create Release
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -38,7 +38,7 @@ jobs:
   publish_release:
     name: Publish Release
     needs: [build]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout source
         uses: actions/checkout@v4

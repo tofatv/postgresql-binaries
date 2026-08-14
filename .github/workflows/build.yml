@@ -13,34 +13,24 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.id }} (${{ matrix.target }}) (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.id }} (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
+      # Everything runs on the SELF-HOSTED fleet (GitHub-hosted runners are
+      # not available to this org): Linux legs on the x64 Linux runner via
+      # Docker buildx + qemu, macOS on the arm64 Mac, Windows on the Windows
+      # box. The matrix is trimmed to the targets tofa actually ships or
+      # downloads at first boot; the full upstream arch list (arm32 flavors,
+      # x86, mips, ppc64, s390x, macos-x64) remains available at 18.3.0 for
+      # anything still pinned there.
       matrix:
         id:
           - linux-arm64
           - linux-arm64-musl
-          - linux-arm
-          - linux-arm-musl
-          - linux-armhf
-          - linux-armhf-musl
-          - linux-armv5te
-          - linux-armv7l
-          - linux-armv7l-musl
           - linux-x64
           - linux-x64-musl
-          - linux-x86
-          - linux-x86-musl
-          - linux-i586
-          - linux-i586-musl
-          - linux-mips64le
-          - linux-powerpc64el
-          - linux-powerpc64el-musl
-          - linux-s390x
-          - linux-s390x-musl
           - macos-arm64
-          - macos-x64
           - windows-x64
 
         include:
@@ -52,123 +42,27 @@ jobs:
 
           - id: linux-arm64
             target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
+            runner: [self-hosted, Linux, X64]
             platform: linux/arm64/v8
             architecture: "AArch64"
 
           - id: linux-arm64-musl
             target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
+            runner: [self-hosted, Linux, X64]
             platform: linux/arm64/v8
             architecture: "AArch64"
 
-          - id: linux-arm
-            target: arm-unknown-linux-gnueabi
-            os: ubuntu-latest
-            platform: linux/arm/v6
-            architecture: "ARM"
-
-          - id: linux-arm-musl
-            target: arm-unknown-linux-musleabi
-            os: ubuntu-latest
-            platform: linux/arm/v6
-            architecture: "ARM"
-
-          - id: linux-armhf
-            target: arm-unknown-linux-gnueabihf
-            os: ubuntu-latest
-            platform: linux/arm/v7
-            architecture: "ARM"
-
-          - id: linux-armhf-musl
-            target: arm-unknown-linux-musleabihf
-            os: ubuntu-latest
-            platform: linux/arm/v7
-            architecture: "ARM"
-
-          - id: linux-armv5te
-            target: armv5te-unknown-linux-gnueabi
-            os: ubuntu-latest
-            platform: linux/arm/v5
-            architecture: "ARM"
-
-          - id: linux-armv7l
-            target: armv7-unknown-linux-gnueabihf
-            os: ubuntu-latest
-            platform: linux/arm/v7
-            architecture: "ARM"
-
-          - id: linux-armv7l-musl
-            target: armv7-unknown-linux-musleabihf
-            os: ubuntu-latest
-            platform: linux/arm/v7
-            architecture: "ARM"
-
           - id: linux-x64
             target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            runner: [self-hosted, Linux, X64]
             platform: linux/amd64
             architecture: "Advanced Micro Devices X86-64"
 
           - id: linux-x64-musl
             target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
+            runner: [self-hosted, Linux, X64]
             platform: linux/amd64
             architecture: "Advanced Micro Devices X86-64"
-
-          - id: linux-x86
-            target: i686-unknown-linux-gnu
-            os: ubuntu-latest
-            platform: linux/386
-            architecture: "Intel 80386"
-
-          - id: linux-x86-musl
-            target: i686-unknown-linux-musl
-            os: ubuntu-latest
-            platform: linux/386
-            architecture: "Intel 80386"
-
-          - id: linux-i586
-            target: i586-unknown-linux-gnu
-            os: ubuntu-latest
-            platform: linux/386
-            architecture: "Intel 80386"
-
-          - id: linux-i586-musl
-            target: i586-unknown-linux-musl
-            os: ubuntu-latest
-            platform: linux/386
-            architecture: "Intel 80386"
-
-          - id: linux-mips64le
-            target: mips64-unknown-linux-gnuabi64
-            os: ubuntu-latest
-            platform: linux/mips64le
-            architecture: "MIPS R3000"
-
-          - id: linux-powerpc64el
-            target: powerpc64le-unknown-linux-gnu
-            os: ubuntu-latest
-            platform: linux/ppc64le
-            architecture: "PowerPC64"
-
-          - id: linux-powerpc64el-musl
-            target: powerpc64le-unknown-linux-musl
-            os: ubuntu-latest
-            platform: linux/ppc64le
-            architecture: "PowerPC64"
-
-          - id: linux-s390x
-            target: s390x-unknown-linux-gnu
-            os: ubuntu-latest
-            platform: linux/s390x
-            architecture: "IBM S/390"
-
-          - id: linux-s390x-musl
-            target: s390x-unknown-linux-musl
-            os: ubuntu-latest
-            platform: linux/s390x
-            architecture: "IBM S/390"
 
           #
           # MacOS
@@ -176,13 +70,8 @@ jobs:
 
           - id: macos-arm64
             target: aarch64-apple-darwin
-            os: macos-15
+            runner: [self-hosted, macOS, ARM64]
             architecture: "arm64"
-
-          - id: macos-x64
-            target: x86_64-apple-darwin
-            os: macos-15-intel
-            architecture: "x86_64"
 
           #
           # Windows
@@ -190,7 +79,7 @@ jobs:
 
           - id: windows-x64
             target: x86_64-pc-windows-msvc
-            os: windows-latest
+            runner: [self-hosted, Windows, X64]
             architecture: "x86-64"
 
     defaults:
@@ -226,7 +115,7 @@ jobs:
       #
 
       - name: Install emulators and configure build (Linux)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ startsWith(matrix.id, 'linux-') }}
         run: |
           platform="${{ matrix.platform }}";
           
@@ -241,7 +130,7 @@ jobs:
           echo "PLATFORM=$platform" | tee -a $GITHUB_ENV
 
       - name: Build (Linux)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ startsWith(matrix.id, 'linux-') }}
         run: |
           cp $DOCKERFILE Dockerfile
           docker buildx build --build-arg "POSTGRESQL_VERSION=$VERSION" --platform "$PLATFORM" --tag postgresql-build:latest .
@@ -265,28 +154,27 @@ jobs:
       - name: Configure build (MacOS)
         if: ${{ startsWith(matrix.id, 'macos-') }}
         run: |
+          # Lean dependency set, mirroring the Linux portability commit: no
+          # icu4c/llvm/python (the shipped 18.3.0 mac asset carries none of
+          # them, and every Homebrew dylib we avoid is one less thing
+          # relocate_macos.py has to bundle). fop was only for the docs,
+          # which world-bin does not build.
           brew install \
-            fop \
             gettext \
-            icu4c \
-            lld \
-            llvm \
             lz4 \
             openssl \
             readline \
             xz \
             zstd
-          
+
           brew_dir="/usr/local"
           if [ "${{ matrix.id }}" == "macos-arm64" ]; then
             brew_dir="/opt/homebrew"
           fi
-          brew_opt_dir="$brew_dir/opt"          
-          ls -l "$brew_opt_dir"
+          brew_opt_dir="$brew_dir/opt"
 
-          echo "CPPFLAGS=-I${brew_opt_dir}/icu4c/include -I${brew_opt_dir}/openssl/include" | tee -a $GITHUB_ENV
-          echo "LDFLAGS=-L${brew_opt_dir}/icu4c/lib -L${brew_opt_dir}/openssl/lib" | tee -a $GITHUB_ENV
-          echo "LLVM_CONFIG=${brew_opt_dir}/llvm/bin/llvm-config" | tee -a $GITHUB_ENV
+          echo "CPPFLAGS=-I${brew_opt_dir}/openssl/include" | tee -a $GITHUB_ENV
+          echo "LDFLAGS=-L${brew_opt_dir}/openssl/lib" | tee -a $GITHUB_ENV
 
       - name: Build (MacOS)
         if: ${{ startsWith(matrix.id, 'macos-') }}
@@ -294,20 +182,21 @@ jobs:
           cd "$SOURCE_DIRECTORY"
           major_version=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print $1}')
           
+          # Feature set matches what the shipped 18.3.0 mac asset actually
+          # carried (no ICU, no LLVM JIT, no plpython): fewer dynamic
+          # dependencies to relocate, and no behavior change for consumers.
           ./configure $build_directory \
             --prefix "$INSTALL_DIRECTORY" \
             --enable-integer-datetimes \
             --enable-option-checking=fatal \
             $([ $major_version -le 16 ] && echo "--enable-thread-safety") \
-            $([ $major_version -ge 14 ] && echo "--with-icu" || echo "--without-icu") \
+            --without-icu \
             --without-ldap \
             --with-libxml \
             --with-libxslt \
-            $([ $major_version -ge 16 ] && echo "--with-llvm") \
             $([ $major_version -ge 14 ] && echo "--with-lz4") \
             --with-openssl \
             --with-pgport=5432 \
-            $([ $major_version -ge 15 ] && echo "--with-python") \
             --with-readline \
             --with-system-tzdata=/usr/share/zoneinfo \
             --with-uuid=e2fs \
@@ -348,7 +237,8 @@ jobs:
       - name: Extract binaries (Windows)
         if: ${{ startsWith(matrix.id, 'windows-') }}
         run: |
-          unzip postgresql.zip
+          # bsdtar (Windows ships it as tar) extracts zip archives; unzip is not installed
+          tar -xf postgresql.zip
           rm -rf pgsql/doc pgsql/pgAdmin*
           mv pgsql "$INSTALL_DIRECTORY"
 
@@ -383,7 +273,8 @@ jobs:
       - name: Build .zip archive (Windows)
         if: ${{ startsWith(matrix.id, 'windows-') }}
         run: |
-          7z a "$ARCHIVE.zip" "$ARCHIVE"
+          # bsdtar -a picks the zip format from the extension; 7z is not installed
+          tar -a -cf "$ARCHIVE.zip" "$ARCHIVE"
           certutil -hashfile "$ARCHIVE.zip" SHA256 > "$ARCHIVE.zip.sha256"
           echo "WINDOWS_ASSET=$ARCHIVE.zip" >> $GITHUB_ENV
           echo "WINDOWS_ASSET_SUM=$ARCHIVE.zip.sha256" >> $GITHUB_ENV
@@ -396,7 +287,7 @@ jobs:
         run: |
           postgres_file="$INSTALL_DIRECTORY/bin/postgres"
           
-          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+          if [[ "${{ matrix.id }}" = linux-* ]]; then
             cpu_architecture=$(readelf --file-header "$postgres_file" | grep 'Machine:')
           else
             cpu_architecture=$(file "$postgres_file")

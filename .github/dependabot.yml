@@ -1,0 +1,29 @@
+# Dependabot version updates, mirroring the tofa repo's policy: one grouped
+# PR per ecosystem per week for minor+patch, majors individually.
+#
+# NOTE: the dependency that matters most in this repo — PostgreSQL itself —
+# is not a Dependabot ecosystem. New upstream minor releases (which carry the
+# CVE fixes) are watched by .github/workflows/upstream-watch.yml instead.
+# Dependabot security updates are a repository SETTING (Settings > Code
+# security), enabled 2026-08-14 alongside this file.
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Base images of the Linux build containers.
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles"
+    schedule:
+      interval: "weekly"

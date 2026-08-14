@@ -1,0 +1,59 @@
+name: upstream-watch
+
+# PostgreSQL is this repo's real dependency, and it is not a Dependabot
+# ecosystem: upstream minor releases (the ones that carry CVE fixes) land as
+# REL_x_y tags on git.postgresql.org. This checks weekly whether a newer
+# minor exists for any major we currently publish, and opens (or updates) an
+# issue so the bump does not depend on somebody remembering.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Compare published majors against upstream minors
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Majors we publish = majors present in this repo's releases.
+          majors=$(gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName \
+            -q '.[].tagName' | awk -F. '{print $1}' | sort -un)
+          [ -n "$majors" ] || { echo "no releases yet"; exit 0; }
+
+          upstream=$(git ls-remote --tags https://git.postgresql.org/git/postgresql.git 'REL_*' \
+            | awk '{print $2}' | grep -E 'REL_[0-9]+_[0-9]+$' | sed -E 's|.*REL_([0-9]+)_([0-9]+)$|\1.\2|')
+
+          stale=""
+          for major in $majors; do
+            latest_upstream=$(echo "$upstream" | awk -F. -v M="$major" '$1==M {print $2}' | sort -n | tail -1)
+            [ -n "$latest_upstream" ] || continue
+            ours=$(gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName \
+              -q '.[].tagName' | awk -F. -v M="$major" '$1==M {print $2}' | sort -n | tail -1)
+            if [ "$latest_upstream" -gt "$ours" ]; then
+              stale="${stale}- PostgreSQL ${major}.${latest_upstream} is out upstream; our newest is ${major}.${ours} (tag a ${major}.${latest_upstream}.0 release to pick it up)\n"
+            fi
+          done
+
+          title="Upstream PostgreSQL minor releases available"
+          existing=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "$title in:title" \
+            --json number -q '.[0].number')
+          if [ -n "$stale" ]; then
+            body=$(printf "Weekly upstream check found newer minors (these carry the CVE fixes):\n\n${stale}\nMinor releases are drop-in for existing clusters of the same major.")
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" -R "$GITHUB_REPOSITORY" --body "$body"
+            else
+              gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue close "$existing" -R "$GITHUB_REPOSITORY" \
+              --comment "All published majors are on the latest upstream minor again."
+          fi
