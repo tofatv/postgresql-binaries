@@ -24,7 +24,11 @@ jobs:
       - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${VERSION}" --draft --verify-tag --title $VERSION
+        run: |
+          # Tolerate an existing draft from an earlier attempt at this tag, so
+          # a failed leg can be fixed and re-tagged without manual cleanup.
+          gh release create "${VERSION}" --draft --verify-tag --title $VERSION \
+            || gh release view "${VERSION}" --json isDraft -q '"reusing existing release (draft: " + (.isDraft|tostring) + ")"' 
     outputs:
       version: ${{ env.VERSION }}
 
