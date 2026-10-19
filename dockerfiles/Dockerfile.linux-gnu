@@ -22,9 +22,11 @@ RUN branch=$(echo "$POSTGRESQL_VERSION" | awk -F. '{print "REL_"$1"_"$2}') && \
     echo "branch=$branch" && \
     git config --global http.version HTTP/1.1 && \
     for i in $(seq 1 5); do \
-        git clone --depth 1 --branch $branch -c advice.detachedHead=false https://git.postgresql.org/git/postgresql.git /usr/src/postgresql \
-            && break || sleep 3; \
-    done
+        rm -rf /usr/src/postgresql; \
+        git clone --depth 1 --branch $branch -c advice.detachedHead=false https://github.com/postgres/postgres.git /usr/src/postgresql \
+            && break || sleep 10; \
+    done && \
+    test -x /usr/src/postgresql/configure || { echo "PostgreSQL source checkout failed"; exit 1; }
 
 WORKDIR /usr/src/postgresql
 

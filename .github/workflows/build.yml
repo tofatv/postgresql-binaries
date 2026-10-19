@@ -90,7 +90,7 @@ jobs:
 
           if [ -z "$version" ]; then
             # Set default version for non-release builds
-            version="18.6.2"
+            version="18.6.3"
           fi
 
           root_directory="$(pwd)"
@@ -140,7 +140,14 @@ jobs:
         run: |
           source_directory="$ROOT_DIRECTORY/postgresql-src"
           branch=$(echo "$VERSION" | awk -F. '{print "REL_"$1"_"$2}')
-          git clone --depth 1 --branch $branch -c advice.detachedHead=false https://git.postgresql.org/git/postgresql.git "$source_directory"
+          # GitHub mirror of postgres/postgres: git.postgresql.org dropped
+          # every runner's clone mid-transfer on 2026-10-19 (early EOF).
+          for i in 1 2 3 4 5; do
+            rm -rf "$source_directory"
+            git clone --depth 1 --branch $branch -c advice.detachedHead=false https://github.com/postgres/postgres.git "$source_directory" && break
+            sleep 10
+          done
+          [ -x "$source_directory/configure" ] || { echo "::error::PostgreSQL source checkout failed"; exit 1; }
           echo "SOURCE_DIRECTORY=$source_directory" | tee -a $GITHUB_ENV
 
       - name: Build (MacOS)
@@ -214,7 +221,14 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $branch = "REL_" + ($env:VERSION -replace '^(\d+)\.(\d+).*','$1_$2')
-          git clone --depth 1 --branch $branch -c advice.detachedHead=false https://git.postgresql.org/git/postgresql.git pgsrc
+          # GitHub mirror plus retries; see the macOS checkout above.
+          foreach ($i in 1..5) {
+            if (Test-Path pgsrc) { Remove-Item -Recurse -Force pgsrc }
+            git clone --depth 1 --branch $branch -c advice.detachedHead=false https://github.com/postgres/postgres.git pgsrc
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds 10
+          }
+          if (-not (Test-Path pgsrc\meson.build)) { throw "PostgreSQL source checkout failed" }
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vsroot = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           $vcvars = "$vsroot\VC\Auxiliary\Build\vcvars64.bat"
