@@ -125,7 +125,7 @@ jobs:
         if: ${{ startsWith(matrix.id, 'linux-') }}
         run: |
           cp $DOCKERFILE Dockerfile
-          docker buildx build --build-arg "POSTGRESQL_VERSION=$VERSION" --platform "$PLATFORM" --tag postgresql-build:latest .
+          docker buildx build --load --build-arg "POSTGRESQL_VERSION=$VERSION" --platform "$PLATFORM" --tag postgresql-build:latest .
           
           docker create --platform "$PLATFORM" --name pgbuild postgresql-build:latest
           docker cp pgbuild:/opt/postgresql $INSTALL_DIRECTORY
