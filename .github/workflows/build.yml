@@ -90,7 +90,7 @@ jobs:
 
           if [ -z "$version" ]; then
             # Set default version for non-release builds
-            version="18.6.1"
+            version="18.6.2"
           fi
 
           root_directory="$(pwd)"
